@@ -21,9 +21,10 @@ impl Plugin for UiPlugin {
 struct UiState {
     selected_entity: Option<Entity>,
     selected_tool: Tool,
+    selected_shape: ShapeType,
     dragging: bool,
     drag_start: Option<Vec2>,
-    ui_received_click: bool,  // Track if UI was clicked
+    ui_received_click: bool,
 }
 
 #[derive(Default, PartialEq, Clone, Copy)]
@@ -35,26 +36,112 @@ enum Tool {
     Scale,
 }
 
+#[derive(Default, PartialEq, Clone, Copy)]
+enum ShapeType {
+    #[default]
+    Cube,
+    Sphere,
+    Cylinder,
+    Cone,
+    Capsule,
+}
+
 // Component to mark selectable objects
 #[derive(Component)]
 struct Selectable;
 
-fn spawn_cube(
+fn spawn_shape(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
+    shape_type: ShapeType,
     position: Vec3,
 ) -> Entity {
+    let (mesh, collider) = match shape_type {
+        ShapeType::Cube => (
+            Mesh::from(shape::Box::new(1.0, 1.0, 1.0)),
+            Collider::cuboid(0.5, 0.5, 0.5),
+        ),
+        ShapeType::Sphere => (
+            Mesh::from(shape::UVSphere {
+                radius: 0.5,
+                sectors: 32,
+                stacks: 16,
+            }),
+            Collider::ball(0.5),
+        ),
+        ShapeType::Cylinder => (
+            Mesh::from(shape::Cylinder {
+                radius: 0.5,
+                height: 1.0,
+                resolution: 32,
+                segments: 1,
+            }),
+            Collider::cylinder(0.5, 0.5),
+        ),
+        ShapeType::Cone => {
+            // Create a cone by scaling a cylinder
+            let mut cone_mesh = Mesh::from(shape::Cylinder {
+                radius: 0.5,
+                height: 1.0,
+                resolution: 32,
+                segments: 1,
+            });
+            
+            // Modify the vertices to create a cone shape
+            if let Some(positions) = cone_mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION) {
+                if let bevy::render::mesh::VertexAttributeValues::Float32x3(positions) = positions {
+                    for position in positions.iter_mut() {
+                        if position[1] > 0.0 { // Top vertices
+                            position[0] = 0.0;
+                            position[2] = 0.0;
+                        }
+                    }
+                }
+            }
+            
+            (
+                cone_mesh,
+                // For cone we'll use a custom compound collider
+                Collider::compound(vec![
+                    // Cone base (cylinder with small height)
+                    (
+                        Vec3::new(0.0, -0.45, 0.0),
+                        Quat::IDENTITY,
+                        Collider::cylinder(0.5, 0.1),
+                    ),
+                    // Cone body (approximated with cylinder)
+                    (
+                        Vec3::ZERO,
+                        Quat::IDENTITY,
+                        Collider::cylinder(0.25, 0.8),
+                    ),
+                ]),
+            )
+        },
+        ShapeType::Capsule => (
+            Mesh::from(shape::Capsule {
+                radius: 0.5,
+                rings: 16,
+                depth: 1.0,
+                latitudes: 16,
+                longitudes: 32,
+                uv_profile: default(),
+            }),
+            Collider::capsule_y(0.5, 0.5), // height/2, radius
+        ),
+    };
+
     commands.spawn((
         PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
+            mesh: meshes.add(mesh),
             material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
             transform: Transform::from_translation(position),
             ..default()
         },
         Selectable,
         RigidBody::Dynamic,
-        Collider::cuboid(0.5, 0.5, 0.5),
+        collider,
         ColliderMassProperties::Mass(1.0),
         Restitution::coefficient(0.7),
         Friction::coefficient(0.5),
@@ -177,16 +264,40 @@ fn toolbar_system(
 ) {
     egui::TopBottomPanel::top("toolbar").show(contexts.ctx_mut(), |ui| {
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut ui_state.selected_tool, Tool::Select, "🖱️ Select");
-            ui.selectable_value(&mut ui_state.selected_tool, Tool::Move, "↔️ Move");
-            ui.selectable_value(&mut ui_state.selected_tool, Tool::Rotate, "🔄 Rotate");
-            ui.selectable_value(&mut ui_state.selected_tool, Tool::Scale, "⇲ Scale");
+            // Tools section
+            ui.group(|ui| {
+                ui.label("Tools:");
+                ui.selectable_value(&mut ui_state.selected_tool, Tool::Select, "🖱️ Select");
+                ui.selectable_value(&mut ui_state.selected_tool, Tool::Move, "↔️ Move");
+                ui.selectable_value(&mut ui_state.selected_tool, Tool::Rotate, "🔄 Rotate");
+                ui.selectable_value(&mut ui_state.selected_tool, Tool::Scale, "⇲ Scale");
+            });
             
             ui.separator();
             
-            if ui.button("➕ Add Cube").clicked() {
-                spawn_cube(&mut commands, &mut meshes, &mut materials, Vec3::new(0.0, 2.0, 0.0));
-            }
+            // Add objects dropdown
+            ui.group(|ui| {
+                ui.label("Add Object:");
+                egui::ComboBox::from_id_source("add_object")
+                    .selected_text("➕ Add Object")
+                    .show_ui(ui, |ui| {
+                        if ui.selectable_label(false, "📦 Cube").clicked() {
+                            spawn_shape(&mut commands, &mut meshes, &mut materials, ShapeType::Cube, Vec3::new(0.0, 2.0, 0.0));
+                        }
+                        if ui.selectable_label(false, "⚪ Sphere").clicked() {
+                            spawn_shape(&mut commands, &mut meshes, &mut materials, ShapeType::Sphere, Vec3::new(0.0, 2.0, 0.0));
+                        }
+                        if ui.selectable_label(false, "🛢️ Cylinder").clicked() {
+                            spawn_shape(&mut commands, &mut meshes, &mut materials, ShapeType::Cylinder, Vec3::new(0.0, 2.0, 0.0));
+                        }
+                        if ui.selectable_label(false, "🔺 Cone").clicked() {
+                            spawn_shape(&mut commands, &mut meshes, &mut materials, ShapeType::Cone, Vec3::new(0.0, 2.0, 0.0));
+                        }
+                        if ui.selectable_label(false, "💊 Capsule").clicked() {
+                            spawn_shape(&mut commands, &mut meshes, &mut materials, ShapeType::Capsule, Vec3::new(0.0, 2.0, 0.0));
+                        }
+                    });
+            });
         });
     });
 }
