@@ -92,4 +92,15 @@ Created by ThenerzZ
 
 ## License
 
-This project is intended for personal use in future game development projects by ThenerzZ.
+Copyright (c) 2024 Fabian Wegner. All rights reserved.
+
+This project is licensed for educational use only. See the [LICENSE](LICENSE) file for details.
+
+Key points:
+- Educational use only
+- No commercial use
+- No modifications or derivatives
+- Must maintain attribution
+- No redistribution
+
+For any other use, please contact Fabian Wegner.
