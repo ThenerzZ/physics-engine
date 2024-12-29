@@ -1,42 +1,88 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
-
-mod editor;
-mod physics;
+use bevy::input::mouse::{MouseMotion, MouseWheel};
 mod ui;
-
-use editor::{EditorPlugin, EditorCamera};
-use physics::PhysicsPlugin;
 use ui::UiPlugin;
 
-// Scene Colors
-const GROUND_COLOR: Color = Color::rgb(0.2, 0.2, 0.2);
-const OBJECT_COLOR: Color = Color::rgb(1.0, 0.4, 0.0);
-const CLEAR_COLOR: Color = Color::rgb(0.1, 0.1, 0.1);
+#[derive(Component)]
+struct OrbitCamera {
+    focus: Vec3,
+    radius: f32,
+    rotate_sensitivity: f32,
+    zoom_sensitivity: f32,
+}
+
+impl Default for OrbitCamera {
+    fn default() -> Self {
+        Self {
+            focus: Vec3::ZERO,
+            radius: 10.0,
+            rotate_sensitivity: 1.0,
+            zoom_sensitivity: 0.8,
+        }
+    }
+}
+
+fn orbit_camera(
+    mut query: Query<(&mut Transform, &mut OrbitCamera)>,
+    mouse_buttons: Res<Input<MouseButton>>,
+    mut mouse_motion: EventReader<MouseMotion>,
+    mut mouse_wheel: EventReader<MouseWheel>,
+) {
+    let mut rotation_move = Vec2::ZERO;
+    let mut scroll: f32 = 0.0;
+
+    // Handle mouse input
+    if mouse_buttons.pressed(MouseButton::Right) {
+        for ev in mouse_motion.read() {
+            rotation_move += ev.delta;
+        }
+    }
+    
+    for ev in mouse_wheel.read() {
+        scroll += ev.y;
+    }
+
+    for (mut transform, mut camera) in query.iter_mut() {
+        if rotation_move.length_squared() > 0.0 {
+            let delta_x = rotation_move.x / 180.0 * std::f32::consts::PI * camera.rotate_sensitivity;
+            let delta_y = rotation_move.y / 180.0 * std::f32::consts::PI * camera.rotate_sensitivity;
+            
+            // Orbit around focus point
+            let mut position = transform.translation - camera.focus;
+            
+            // Rotate around Y axis
+            let rot_matrix = Mat3::from_rotation_y(-delta_x);
+            position = rot_matrix * position;
+            
+            // Rotate around local X axis
+            let right = transform.right();
+            let rot_matrix = Mat3::from_axis_angle(right, -delta_y);
+            position = rot_matrix * position;
+            
+            transform.translation = position + camera.focus;
+            transform.look_at(camera.focus, Vec3::Y);
+        }
+
+        // Zoom
+        if scroll.abs() > 0.0 {
+            let zoom_factor = 1.0 - scroll * camera.zoom_sensitivity;
+            camera.radius = (camera.radius * zoom_factor).max(2.0).min(20.0);
+            
+            let forward = transform.forward();
+            transform.translation = camera.focus - forward * camera.radius;
+        }
+    }
+}
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    resolution: (1280., 720.).into(),
-                    title: "Physics Engine".to_string(),
-                    ..default()
-                }),
-                ..default()
-            }),
-            RapierPhysicsPlugin::<NoUserData>::default(),
-            RapierDebugRenderPlugin::default(),
-            EditorPlugin,
-            PhysicsPlugin,
-            UiPlugin,
-        ))
-        .insert_resource(ClearColor(CLEAR_COLOR))
+        .add_plugins(DefaultPlugins)
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugins(RapierDebugRenderPlugin::default())
+        .add_plugins(UiPlugin)
         .add_systems(Startup, setup)
-        .add_systems(Update, (
-            editor_controls,
-            handle_physics_interactions,
-        ))
+        .add_systems(Update, orbit_camera)
         .run();
 }
 
@@ -45,19 +91,19 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // Basic 3D camera
+    // Camera
     commands.spawn((
         Camera3dBundle {
-            transform: Transform::from_xyz(-5.0, 5.0, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+            transform: Transform::from_xyz(-5.0, 5.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
             ..default()
         },
-        EditorCamera,
+        OrbitCamera::default(),
     ));
 
     // Light
     commands.spawn(PointLightBundle {
         point_light: PointLight {
-            intensity: 3000.0,
+            intensity: 1500.0,
             shadows_enabled: true,
             ..default()
         },
@@ -65,69 +111,15 @@ fn setup(
         ..default()
     });
 
-    // Ambient light
-    commands.insert_resource(AmbientLight {
-        color: Color::WHITE,
-        brightness: 0.5,
-    });
-
     // Ground plane
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(shape::Plane::from_size(10.0).into()),
-            material: materials.add(StandardMaterial {
-                base_color: GROUND_COLOR,
-                perceptual_roughness: 0.9,
-                ..default()
-            }),
+            material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
+            transform: Transform::from_xyz(0.0, -0.5, 0.0),
             ..default()
         },
         RigidBody::Fixed,
-        Collider::cuboid(5.0, 0.0, 5.0),
+        Collider::cuboid(5.0, 0.1, 5.0),
     ));
-
-    // Example physics object
-    spawn_cube(&mut commands, &mut meshes, &mut materials, Vec3::new(0.0, 3.0, 0.0));
-}
-
-fn spawn_cube(
-    commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
-    position: Vec3,
-) {
-    commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(shape::Cube::new(1.0).into()),
-            material: materials.add(StandardMaterial {
-                base_color: OBJECT_COLOR,
-                perceptual_roughness: 0.7,
-                ..default()
-            }),
-            transform: Transform::from_translation(position),
-            ..default()
-        },
-        RigidBody::Dynamic,
-        Collider::cuboid(0.5, 0.5, 0.5),
-    ));
-}
-
-fn editor_controls(
-    keyboard: Res<Input<KeyCode>>,
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    if keyboard.just_pressed(KeyCode::Space) {
-        spawn_cube(
-            &mut commands,
-            &mut meshes,
-            &mut materials,
-            Vec3::new(0.0, 3.0, 0.0),
-        );
-    }
-}
-
-fn handle_physics_interactions() {
-    // Will be implemented later
 }
