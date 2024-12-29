@@ -1,37 +1,95 @@
-# Physics Engine with Interactive Editor
+# Physics Engine by ThenerzZ
 
-A 3D physics engine built with Rust, using Bevy for rendering and Rapier for physics simulation.
+A demonstration project showcasing how to build a physics-based engine using Rust. This project serves as an educational example of implementing physics simulation, 3D rendering, and interactive UI in Rust, while also being a foundation for future game development projects.
+
+## About
+
+This engine is primarily a proof-of-concept demonstrating:
+- How to integrate physics simulation with a modern game engine (Bevy)
+- Ways to implement interactive 3D object manipulation
+- Techniques for building responsive UI for 3D applications
+- Basic architecture for a physics-based game engine
+
+While functional, this is meant to be an educational resource and starting point rather than a production-ready engine.
 
 ## Features
 
-- 3D physics simulation
-- Interactive editor window
-- Real-time object manipulation
-- Collision detection and response
-- Dynamic object creation
+- **Interactive 3D Environment**
+  - Orbit camera controls
+  - Object selection and manipulation
+  - Real-time physics simulation
+
+- **Multiple Shape Types**
+  - Cubes
+  - Spheres
+  - Cylinders
+  - Cones
+  - Capsules
+
+- **Physics Properties**
+  - Dynamic rigid bodies
+  - Collision detection
+  - Mass properties
+  - Friction and restitution
+  - Damping controls
+
+- **User Interface**
+  - Inspector panel for object properties
+  - Transform tools (Move, Rotate, Scale)
+  - Easy object creation via dropdown menu
+  - Real-time property editing
+
+## Learning Points
+
+This project demonstrates several key concepts in game engine development:
+- Physics integration with rendering systems
+- Event handling and user input
+- UI state management
+- 3D object manipulation
+- Component-based architecture using Bevy ECS
+
+## Technologies Used
+
+- **Bevy** (v0.12.0) - Game engine and rendering
+- **Bevy Rapier 3D** (v0.23.0) - Physics simulation
+- **Bevy Egui** (v0.24.0) - User interface
+
+These choices showcase modern Rust game development practices and tools.
+
+## Getting Started
+
+1. Install Rust and Cargo
+2. Clone the repository
+3. Run the engine:
+```bash
+cargo run
+```
 
 ## Controls
 
-- WASD: Move camera horizontally
-- Q/E: Move camera up/down
-- Space: Spawn new physics object
-- Mouse: Look around (coming soon)
+- **Left Click**: Select objects
+- **Right Click + Drag**: Orbit camera
+- **Mouse Wheel**: Zoom in/out
+- **UI Tools**:
+  - Select: Choose objects
+  - Move: Translate objects
+  - Rotate: Rotate objects
+  - Scale: Resize objects
 
-## Building and Running
+## Future Development
 
-Make sure you have Rust installed, then:
+This engine is being developed as a foundation for future games by ThenerzZ. Planned features include:
+- More primitive shapes
+- Custom mesh support
+- Advanced physics constraints
+- Scene saving/loading
+- Material system
+- Particle effects
 
-```bash
-cargo run --release
-```
+## Author
 
-## Dependencies
+Created by ThenerzZ
 
-- bevy: Game engine and rendering
-- bevy_rapier3d: Physics simulation
+## License
 
-## Project Structure
-
-- `src/main.rs`: Main application entry point and setup
-- `src/editor.rs`: Editor controls and camera management
-- `src/physics.rs`: Physics simulation and object behavior
+This project is intended for personal use in future game development projects by ThenerzZ.
